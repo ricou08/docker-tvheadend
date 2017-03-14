@@ -1,0 +1,16 @@
+#!/bin/bash
+#Script permettant d'extraire et de convertir l'audio d'un enregistrement tv en mp3.
+#Le fichier mp3 étant placé dans un sous retpertoire du repertoire podacast des musiques partagées
+
+#Variable
+f=$1
+title=$2
+name=$(basename "$f" .ts)
+ext=mp3
+folder="/share/music/$title"
+
+if [ ! -d "$folder" ]; then
+   mkdir "$folder"
+fi
+
+ffmpeg -i "$f"  -acodec libmp3lame -ab 128k "$folder/$name.$ext"
