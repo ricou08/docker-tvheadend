@@ -44,6 +44,7 @@ RUN \
 	sdl-dev \
 	uriparser-dev \
 	wget \
+	lame \
 	zlib-dev && \
 
 # add runtime dependencies required in build stage
