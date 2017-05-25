@@ -1,8 +1,11 @@
 FROM lsiobase/alpine:3.5
 MAINTAINER saarg
 
-# package version
+# package version
 ARG ARGTABLE_VER="2.13"
+ARG FFMPEG_VER="ffmpeg"
+ARG TVH_VER="v4.2.1"
+ARG TZ="Europe/Paris"
 ARG XMLTV_VER="0.5.69"
 
 # set version label
@@ -13,8 +16,9 @@ LABEL build_version="Build-date:- ${BUILD_DATE}"
 # Environment settings
 ENV HOME="/config"
 
-# copy patches
+# copy patches
 COPY patches/ /tmp/patches/
+
 
 # install build packages
 RUN \
@@ -23,7 +27,7 @@ RUN \
 	automake \
 	cmake \
 	coreutils \
-	ffmpeg-dev \
+	${FFMPEG_VER}-dev \
 	file \
 	findutils \
 	g++ \
@@ -44,8 +48,10 @@ RUN \
 	sdl-dev \
 	uriparser-dev \
 	wget \
-	lame \
 	zlib-dev && \
+ apk add --no-cache --virtual=build-dependencies \
+ 	--repository http://nl.alpinelinux.org/alpine/edge/testing \
+	gnu-libiconv-dev && \
 
 # add runtime dependencies required in build stage
  apk add --no-cache \
@@ -54,7 +60,7 @@ RUN \
 	curl \
 	gzip \
 	libcrypto1.0 \
-	libcurl	\
+	libcurl \
 	libssl1.0 \
 	linux-headers \
 	libressl \
@@ -117,42 +123,7 @@ RUN \
 
 # install perl modules for xmltv
  curl -L http://cpanmin.us | perl - App::cpanminus && \
- cpanm DateTime::Format::ISO8601 && \
- cpanm DateTime::Format::SQLite && \
- cpanm Encode && \
- cpanm File::HomeDir && \
- cpanm File::Path && \
- cpanm HTML::Entities && \
- cpanm HTML::TableExtract && \
- cpanm HTTP::Cache::Transparent && \
- cpanm inc && \
- cpanm JSON::PP && \
- cpanm LWP::Simple && \
- cpanm LWP::UserAgent && \
- cpanm PerlIO::gzip && \
- cpanm SOAP::Lite && \
- cpanm Storable && \
- cpanm Unicode::UTF8simple && \
- cpanm version && \
- cpanm WWW::Mechanize && \
- cpanm XML::DOM && \
-
-# build libiconv
- mkdir -p \
- /tmp/iconv-src && \
- curl -o \
- /tmp/iconv.tar.gz -L \
-	ftp://www.mirrorservice.org/sites/ftp.gnu.org/gnu/libiconv/libiconv-1.14.tar.gz && \
- tar xf /tmp/iconv.tar.gz -C \
-	/tmp/iconv-src --strip-components=1 && \
- cd /tmp/iconv-src && \
- ./configure \
-	--prefix=/usr/local && \
- patch -p1 -i \
-	/tmp/patches/libiconv-1-fixes.patch && \
- make && \
- make install && \
- libtool --finish /usr/local/lib && \
+ cpanm --installdeps /tmp/patches && \
 
 # build dvb-apps
  hg clone http://linuxtv.org/hg/dvb-apps /tmp/dvb-apps && \
@@ -163,6 +134,7 @@ RUN \
 # build tvheadend
  git clone https://github.com/tvheadend/tvheadend.git /tmp/tvheadend && \
  cd /tmp/tvheadend && \
+ git checkout "${TVH_VER}" && \
  ./configure \
 	--disable-ffmpeg_static \
 	--disable-hdhomerun_static \
@@ -181,65 +153,67 @@ RUN \
 	--prefix=/usr \
 	--sysconfdir=/config && \
  make && \
- make install && \	
+ make install && \
 
 # build XMLTV
  curl -o /tmp/xmtltv-src.tar.bz2 -L \
-	"http://kent.dl.sourceforge.net/project/xmltv/xmltv/${XMLTV_VER}/xmltv-${XMLTV_VER}.tar.bz2" && \
+"http://kent.dl.sourceforge.net/project/xmltv/xmltv/${XMLTV_VER}/xmltv-${XMLTV_VER}.tar.bz2" && \
  tar xf /tmp/xmtltv-src.tar.bz2 -C \
-	/tmp --strip-components=1 && \
+/tmp --strip-components=1 && \
  cd "/tmp/xmltv-${XMLTV_VER}" && \
  /bin/echo -e "yes" | perl Makefile.PL PREFIX=/usr/ INSTALLDIRS=vendor && \
  make && \
  make test && \
  make install && \
 
-# build argtable2
+# build argtable2
  ARGTABLE_VER1="${ARGTABLE_VER//./-}" && \
  mkdir -p \
-	/tmp/argtable && \
+/tmp/argtable && \
  curl -o \
  /tmp/argtable-src.tar.gz -L \
-	"https://sourceforge.net/projects/argtable/files/argtable/argtable-${ARGTABLE_VER}/argtable${ARGTABLE_VER1}.tar.gz" && \
+"https://sourceforge.net/projects/argtable/files/argtable/argtable-${ARGTABLE_VER}/argtable${ARGTABLE_VER1}.tar.gz" && \
  tar xf /tmp/argtable-src.tar.gz -C \
-	/tmp/argtable --strip-components=1 && \
+/tmp/argtable --strip-components=1 && \
  cd /tmp/argtable && \
  ./configure \
-	--prefix=/usr && \
+--prefix=/usr && \
  make && \
  make check && \
  make install && \
 
-# build comskip
+# build comskip
  git clone git://github.com/erikkaashoek/Comskip /tmp/comskip && \
  cd /tmp/comskip && \
  ./autogen.sh && \
  ./configure \
-	--bindir=/usr/bin \
-	--sysconfdir=/config/comskip && \
+--bindir=/usr/bin \
+--sysconfdir=/config/comskip && \
  make && \
  make install && \
 
 # install runtime packages
  apk add --no-cache \
-	ffmpeg \
-	ffmpeg-libs \
-	libhdhomerun-libs \
-	libxml2 \
-	libxslt && \
+${FFMPEG_VER} \
+${FFMPEG_VER}-libs \
+libhdhomerun-libs \
+libxml2 \
+libxslt && \
+ apk add --no-cache \
+--repository http://nl.alpinelinux.org/alpine/edge/testing \
+gnu-libiconv && \
 
 # cleanup
  apk del --purge \
-	build-dependencies && \
+build-dependencies && \
  rm -rf \
-	/config/.cpanm \
-	/tmp/*
+/config/.cpanm \
+/tmp/*
 
 # copy local files
 COPY root/ /
 
 # add picons
-#ADD picons.tar.bz2 /picons
 
 # ports and volumes
 EXPOSE 9981 9982
