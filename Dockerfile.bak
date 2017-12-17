@@ -1,78 +1,72 @@
-FROM lsiobase/alpine:3.7
+FROM lsiobase/alpine:latest
+MAINTAINER saarg
+
+# package version
+ARG ARGTABLE_VER="2.13"
+ARG FFMPEG_VER="ffmpeg"
+ARG TVH_VER="v4.2.4"
+ARG TZ="Europe/Paris"
+ARG XMLTV_VER="0.5.69"
 
 # set version label
 ARG BUILD_DATE
 ARG VERSION
-LABEL build_version="Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}"
-LABEL maintainer="saarg"
+LABEL build_version="Build-date:- ${BUILD_DATE}"
 
-# package versions
-ARG ARGTABLE_VER="2.13"
-ARG TZ="Europe/Oslo"
-ARG XMLTV_VER="0.5.69"
-
-# environment settings
+# Environment settings
 ENV HOME="/config"
 
 # copy patches
 COPY patches/ /tmp/patches/
 
+
+# install build packages
 RUN \
- echo "**** install build packages ****" && \
  apk add --no-cache --virtual=build-dependencies \
 	autoconf \
 	automake \
 	cmake \
-	ffmpeg-dev \
+	coreutils \
+	${FFMPEG_VER}-dev \
 	file \
 	findutils \
 	g++ \
 	gcc \
 	gettext-dev \
 	git \
-	libgcrypt-dev \
 	libhdhomerun-dev \
-	libressl-dev \
+	libgcrypt-dev \
 	libtool \
-	libvpx-dev \
 	libxml2-dev \
 	libxslt-dev \
 	make \
 	mercurial \
-	opus-dev \
+	libressl-dev \
 	patch \
-	pcre2-dev \
 	perl-dev \
 	pkgconf \
 	sdl-dev \
 	uriparser-dev \
 	wget \
-	x264-dev \
-	x265-dev \
 	perl-digest-hmac \
 	zlib-dev && \
  apk add --no-cache --virtual=build-dependencies \
-	--repository http://nl.alpinelinux.org/alpine/edge/testing \
-	gnu-libiconv-dev && \
- echo "**** install runtime packages ****" && \
+ 	--repository http://nl.alpinelinux.org/alpine/edge/testing \
+	gnu-libiconv-dev
+
+
+# add runtime dependencies required in build stage
+RUN \
  apk add --no-cache \
 	bsd-compat-headers \
 	bzip2 \
 	curl \
-	ffmpeg \
-	ffmpeg-libs \
 	gzip \
 	libcrypto1.0 \
-	libcurl	\
-	libhdhomerun-libs \
-	libressl \
+	libcurl \
 	libssl1.0 \
-	libvpx \
-	libxml2 \
-	libxslt \
 	linux-headers \
-	opus \
-	pcre2 \
+	libressl \
 	perl \
 	perl-archive-zip \
 	perl-boolean \
@@ -87,7 +81,6 @@ RUN \
 	perl-dbd-sqlite \
 	perl-dbi \
 	perl-digest-sha1 \
-	perl-doc \
 	perl-file-slurp \
 	perl-file-temp \
 	perl-file-which \
@@ -129,24 +122,23 @@ RUN \
 	tar \
 	uriparser \
 	wget \
-	x264 \
-	x265 \
-	perl-digest-hmac \
-	zlib && \
- apk add --no-cache \
-	--repository http://nl.alpinelinux.org/alpine/edge/testing \
-	gnu-libiconv && \
- echo "**** install perl modules for xmltv ****" && \
+	zlib
+
+# install perl modules for xmltv
+RUN \
  curl -L http://cpanmin.us | perl - App::cpanminus && \
  cpanm --installdeps /tmp/patches && \
- echo "**** build dvb-apps ****" && \
+
+# build dvb-apps
  hg clone http://linuxtv.org/hg/dvb-apps /tmp/dvb-apps && \
  cd /tmp/dvb-apps && \
  make -C lib && \
  make -C lib install && \
- echo "**** build tvheadend ****" && \
+
+# build tvheadend
  git clone https://github.com/tvheadend/tvheadend.git /tmp/tvheadend && \
  cd /tmp/tvheadend && \
+ git checkout "${TVH_VER}" && \
  ./configure \
 	--disable-ffmpeg_static \
 	--disable-hdhomerun_static \
@@ -164,73 +156,63 @@ RUN \
 	--mandir=/usr/share/man \
 	--prefix=/usr \
 	--sysconfdir=/config && \
-  echo "**** attempt to set number of cores available for make to use ****" && \
- set -ex && \
- CPU_CORES=$( < /proc/cpuinfo grep -c processor ) || echo "failed cpu look up" && \
- if echo $CPU_CORES | grep -E  -q '^[0-9]+$'; then \
-	: ;\
- if [ "$CPU_CORES" -gt 7 ]; then \
-	CPU_CORES=$(( CPU_CORES  - 3 )); \
- elif [ "$CPU_CORES" -gt 5 ]; then \
-	CPU_CORES=$(( CPU_CORES  - 2 )); \
- elif [ "$CPU_CORES" -gt 3 ]; then \
-	CPU_CORES=$(( CPU_CORES  - 1 )); fi \
- else CPU_CORES="1"; fi && \
- make -j $CPU_CORES && \
+ make && \
  make install && \
- echo "**** build XMLTV ****" && \
- curl -o \
- /tmp/xmtltv-src.tar.bz2 -L \
-	"http://kent.dl.sourceforge.net/project/xmltv/xmltv/${XMLTV_VER}/xmltv-${XMLTV_VER}.tar.bz2" && \
- tar xf \
- /tmp/xmtltv-src.tar.bz2 -C \
-	/tmp --strip-components=1 && \
+
+# build XMLTV
+ curl -o /tmp/xmtltv-src.tar.bz2 -L \
+"http://kent.dl.sourceforge.net/project/xmltv/xmltv/${XMLTV_VER}/xmltv-${XMLTV_VER}.tar.bz2" && \
+ tar xf /tmp/xmtltv-src.tar.bz2 -C \
+/tmp --strip-components=1 && \
  cd "/tmp/xmltv-${XMLTV_VER}" && \
- echo "**** Perl 5.26 fixes for XMTLV ****" && \
- sed "s/use POSIX 'tmpnam';//" -i filter/tv_to_latex && \
- sed "s/use POSIX 'tmpnam';//" -i filter/tv_to_text && \
- sed "s/\(lib\/set_share_dir.pl';\)/.\/\1/" -i grab/it/tv_grab_it.PL && \
- sed "s/\(filter\/Grep.pm';\)/.\/\1/" -i filter/tv_grep.PL && \
- sed "s/\(lib\/XMLTV.pm.in';\)/.\/\1/" -i lib/XMLTV.pm.PL && \
- sed "s/\(lib\/Ask\/Term.pm';\)/.\/\1/" -i Makefile.PL && \
- PERL5LIB=`pwd` && \
- echo -e "yes" | perl Makefile.PL PREFIX=/usr/ INSTALLDIRS=vendor && \
- make -j $CPU_CORES && \
+ /bin/echo -e "yes" | perl Makefile.PL PREFIX=/usr/ INSTALLDIRS=vendor && \
+ make && \
  make test && \
  make install && \
- echo "**** build argtable2 ****" && \
+
+# build argtable2
  ARGTABLE_VER1="${ARGTABLE_VER//./-}" && \
  mkdir -p \
-	/tmp/argtable && \
+/tmp/argtable && \
  curl -o \
  /tmp/argtable-src.tar.gz -L \
-	"https://sourceforge.net/projects/argtable/files/argtable/argtable-${ARGTABLE_VER}/argtable${ARGTABLE_VER1}.tar.gz" && \
- tar xf \
- /tmp/argtable-src.tar.gz -C \
-	/tmp/argtable --strip-components=1 && \
- cp /tmp/patches/config.* /tmp/argtable && \
+"https://sourceforge.net/projects/argtable/files/argtable/argtable-${ARGTABLE_VER}/argtable${ARGTABLE_VER1}.tar.gz" && \
+ tar xf /tmp/argtable-src.tar.gz -C \
+/tmp/argtable --strip-components=1 && \
  cd /tmp/argtable && \
  ./configure \
-	--prefix=/usr && \
- make -j $CPU_CORES && \
+--prefix=/usr && \
+ make && \
  make check && \
  make install && \
- echo "***** build comskip ****" && \
+
+# build comskip
  git clone git://github.com/erikkaashoek/Comskip /tmp/comskip && \
  cd /tmp/comskip && \
  ./autogen.sh && \
  ./configure \
-	--bindir=/usr/bin \
-	--sysconfdir=/config/comskip && \
- make -j $CPU_CORES && \
- set +ex && \
+--bindir=/usr/bin \
+--sysconfdir=/config/comskip && \
+ make && \
  make install && \
- echo "***** cleanup ****" && \
+
+# install runtime packages
+ apk add --no-cache \
+${FFMPEG_VER} \
+${FFMPEG_VER}-libs \
+libhdhomerun-libs \
+libxml2 \
+libxslt && \
+ apk add --no-cache \
+--repository http://nl.alpinelinux.org/alpine/edge/testing \
+gnu-libiconv && \
+
+# cleanup
  apk del --purge \
-	build-dependencies && \
+build-dependencies && \
  rm -rf \
-	/config/.cpanm \
-	/tmp/*
+/config/.cpanm \
+/tmp/*
 
 # copy local files
 COPY root/ /
