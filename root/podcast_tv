@@ -16,5 +16,5 @@ fi
 ffmpeg -i "$f"  -acodec libmp3lame -ab 128k "$folder/$name.$ext"
 
 #supression des épisodes audio et video vieux d'une semaine
-find "$folder" -name "*" -mtime +6 -exec rm {} \;
+find "/share/music/podcast/$title" -name "*" -mtime +6 -exec rm {} \;
 find "/share/video/enregistrement/$title" -name "*" -mtime +6 -exec rm {} \;
