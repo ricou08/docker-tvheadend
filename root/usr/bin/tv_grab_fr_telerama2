@@ -266,7 +266,7 @@ use strict;
 use XMLTV::Version '$Id: tv_grab_fr_telerama,v 1.35 2018/11/08 22:21:00 zubrick Exp $ ';
 #use XMLTV::Capabilities qw/baseline manualconfig cache/;
 use XMLTV::Capabilities qw/baseline manualconfig/;
-use XMLTV::Description 'France (telerama)';
+use XMLTV::Description 'France (telerama2)';
 use Getopt::Long;
 use IO::File;
 use URI;
